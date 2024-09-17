@@ -1,0 +1,49 @@
+version: '1.0'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: trdlo_app
+    restart: unless-stopped
+    volumes:
+      - .:/var/www/html
+    environment:
+      - APP_ENV=dev
+    networks:
+      - trdlo_network
+
+  db:
+    image: mysql:8.0
+    container_name: trdlo_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: faktury
+      MYSQL_USER: faktura
+      MYSQL_PASSWORD: faktura
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - trdlo_network
+
+  web:
+    image: nginx:latest
+    container_name: trdlo_web
+    ports:
+      - "81:81"
+    volumes:
+      - .:/var/www/html/index.php
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - app
+    networks:
+      - trdlo_network
+
+networks:
+  trdlo_network:
+    driver: bridge
+
+volumes:
+  db_data:
