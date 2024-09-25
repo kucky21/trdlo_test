@@ -1,0 +1,1 @@
+{"version":1,"defects":{"App\\Tests\\Controller\\InvoiceControllerTest::testAddItemAndRecalculateTotal":4},"times":{"App\\Tests\\Controller\\InvoiceControllerTest::testAddItemAndRecalculateTotal":1.534}}
