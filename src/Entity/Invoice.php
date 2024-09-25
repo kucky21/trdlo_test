@@ -36,17 +36,17 @@ class Invoice
     )]
     private ?string $supplier = null;
 
-    #[ORM\Column(type: 'datetime')]
-    #[Assert\NotBlank(message: 'Issue date should not be blank.')]
-    #[Assert\Type(\DateTimeInterface::class, message: 'The value {{ value }} is not a valid date.')]
+    #[ORM\Column(type: 'date')]
+    #[Assert\NotBlank(message: 'The issue date cannot be blank.')]
+    #[Assert\LessThanOrEqual('today', message: 'The issue date cannot be in the future.')]
     private ?\DateTimeInterface $issueDate = null;
 
-    #[ORM\Column(type: 'datetime')]
+    #[ORM\Column(type: 'date')]
     #[Assert\NotBlank(message: 'Due date should not be blank.')]
     #[Assert\Type(\DateTimeInterface::class, message: 'The value {{ value }} is not a valid date.')]
     private ?\DateTimeInterface $dueDate = null;
 
-    #[ORM\Column(type: 'datetime')]
+    #[ORM\Column(type: 'date')]
     #[Assert\NotBlank(message: 'Payment date should not be blank.')]
     #[Assert\Type(\DateTimeInterface::class, message: 'The value {{ value }} is not a valid date.')]
     private ?\DateTimeInterface $paymentDate = null;
@@ -56,7 +56,6 @@ class Invoice
     private ?string $paymentMethod = null;
 
     #[ORM\Column(type: 'string', length: 8, unique: true)]
-    #[Assert\NotBlank(message: 'Invoice number should not be blank.')]
     #[Assert\Length(
         min: 8,
         max: 8,
@@ -65,7 +64,6 @@ class Invoice
     private ?string $invoiceNumber = null;
 
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
-    #[Assert\NotBlank(message: 'Total amount should not be blank.')]
     #[Assert\PositiveOrZero(message: 'Total amount must be zero or positive.')]
     private ?float $totalAmount = null;
 
@@ -160,7 +158,7 @@ class Invoice
         return $this->invoiceNumber;
     }
 
-    public function setInvoiceNumber(string $invoiceNumber): self
+    public function setInvoiceNumber(?string $invoiceNumber): self
     {
         $this->invoiceNumber = $invoiceNumber;
 
@@ -172,7 +170,7 @@ class Invoice
         return $this->totalAmount;
     }
 
-    public function setTotalAmount(float $totalAmount): self
+    public function setTotalAmount(?float $totalAmount): self
     {
         $this->totalAmount = $totalAmount;
 
@@ -190,22 +188,21 @@ class Invoice
     public function addItem(Item $item): self
     {
         if (!$this->items->contains($item)) {
-            $this->items->add($item);
+            $this->items[] = $item;
             $item->setInvoice($this);
         }
-
+    
         return $this;
     }
 
     public function removeItem(Item $item): self
     {
         if ($this->items->removeElement($item)) {
-            // Set the owning side to null (unless already changed)
             if ($item->getInvoice() === $this) {
                 $item->setInvoice(null);
             }
         }
-
+    
         return $this;
     }
 }

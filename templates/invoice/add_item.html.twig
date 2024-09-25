@@ -1,0 +1,31 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Add Item{% endblock %}
+
+{% block body %}
+<h1>Add Item to Invoice {{ invoice.invoiceNumber }}</h1>
+
+{{ form_start(form) }}
+    <div class="mb-3">
+        {{ form_label(form.name) }}
+        {{ form_widget(form.name, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.name) }}
+    </div>
+
+    <div class="mb-3">
+        {{ form_label(form.quantity) }}
+        {{ form_widget(form.quantity, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.quantity) }}
+    </div>
+
+    <div class="mb-3">
+        {{ form_label(form.unitPrice) }}
+        {{ form_widget(form.unitPrice, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.unitPrice) }}
+    </div>
+
+    <button class="btn btn-success">Add Item</button>
+{{ form_end(form) }}
+
+<a href="{{ path('invoice_list') }}" class="btn btn-secondary mt-3">Back to Invoices</a>
+{% endblock %}

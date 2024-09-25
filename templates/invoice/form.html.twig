@@ -1,0 +1,45 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}
+    {{ editMode ? 'Edit Invoice' : 'New Invoice' }}
+{% endblock %}
+
+{% block body %}
+<h1 class="mb-4">{{ editMode ? 'Edit Invoice' : 'New Invoice' }}</h1>
+
+{{ form_start(form, {'attr': {'class': 'form-horizontal'}}) }}
+    <div class="mb-3">
+        {{ form_label(form.customer, null, {'label_attr': {'class': 'form-label'}}) }}
+        {{ form_widget(form.customer, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.customer) }}
+    </div>
+    <div class="mb-3">
+        {{ form_label(form.supplier, null, {'label_attr': {'class': 'form-label'}}) }}
+        {{ form_widget(form.supplier, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.supplier) }}
+    </div>
+    <div class="mb-3">
+        {{ form_label(form.issueDate, null, {'label_attr': {'class': 'form-label'}}) }}
+        {{ form_widget(form.issueDate, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.issueDate) }}
+    </div>
+    <div class="mb-3">
+        {{ form_label(form.dueDate, null, {'label_attr': {'class': 'form-label'}}) }}
+        {{ form_widget(form.dueDate, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.dueDate) }}
+    </div>
+    <div class="mb-3">
+        {{ form_label(form.paymentDate, null, {'label_attr': {'class': 'form-label'}}) }}
+        {{ form_widget(form.paymentDate, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.paymentDate) }}
+    </div>
+    <div class="mb-3">
+        {{ form_label(form.paymentMethod, null, {'label_attr': {'class': 'form-label'}}) }}
+        {{ form_widget(form.paymentMethod, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.paymentMethod) }}
+    </div>
+
+    <button class="btn btn-success">{{ editMode ? 'Update' : 'Create' }}</button>
+    <a href="{{ path('invoice_list') }}" class="btn btn-secondary ms-2">Back to list</a>
+{{ form_end(form) }}
+{% endblock %}
