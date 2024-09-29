@@ -7,24 +7,52 @@ use App\Entity\Item;
 use App\Form\InvoiceType;
 use App\Form\ItemType;
 use App\Repository\InvoiceRepository;
+use App\Service\InvoiceService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use App\Event\InvoiceCreatedEvent;
 use Knp\Component\Pager\PaginatorInterface;
 
 class InvoiceController extends AbstractController
 {
+    private $entityManager;
+    private $invoiceService;
+    private $logger;
+    private $cache;
+    private $eventDispatcher;
+
+    public function __construct(
+        EntityManagerInterface $entityManager,
+        InvoiceService $invoiceService,
+        LoggerInterface $logger,
+        CacheInterface $cache,
+        EventDispatcherInterface $eventDispatcher
+    ) {
+        $this->entityManager = $entityManager;
+        $this->invoiceService = $invoiceService;
+        $this->logger = $logger;
+        $this->cache = $cache;
+        $this->eventDispatcher = $eventDispatcher;
+    }
+
     #[Route('/', name: 'invoice_list')]
     public function list(InvoiceRepository $invoiceRepository, PaginatorInterface $paginator, Request $request): Response
     {
-        $queryBuilder = $invoiceRepository->createQueryBuilder('i');
-        $pagination = $paginator->paginate(
-            $queryBuilder,
-            $request->query->getInt('page', 1),
-            10
-        );
+        $this->logger->info('Fetching invoices from cache or database');
+        $pagination = $this->cache->get('invoice_list', function () use ($invoiceRepository, $paginator, $request) {
+            $queryBuilder = $invoiceRepository->createQueryBuilder('i');
+            return $paginator->paginate(
+                $queryBuilder,
+                $request->query->getInt('page', 1),
+                10
+            );
+        });
 
         return $this->render('invoice/list.html.twig', [
             'pagination' => $pagination,
@@ -32,14 +60,14 @@ class InvoiceController extends AbstractController
     }
 
     #[Route('/invoice/{id}/edit', name: 'invoice_edit', requirements: ['id' => '\d+'])]
-    public function editInvoice(Request $request, Invoice $invoice, EntityManagerInterface $em): Response
+    public function editInvoice(Request $request, Invoice $invoice): Response
     {
         $form = $this->createForm(InvoiceType::class, $invoice);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $em->persist($invoice);
-            $em->flush();
+            $this->entityManager->persist($invoice);
+            $this->entityManager->flush();
 
             return $this->redirectToRoute('invoice_list');
         }
@@ -51,26 +79,28 @@ class InvoiceController extends AbstractController
     }
 
     #[Route('/invoice/new', name: 'invoice_new')]
-    public function newInvoice(EntityManagerInterface $em, Request $request): Response
+    public function newInvoice(Request $request): Response
     {
         $invoice = new Invoice();
-    
+
         $form = $this->createForm(InvoiceType::class, $invoice);
         $form->handleRequest($request);
-    
+
         if ($form->isSubmitted() && $form->isValid()) {
-            $this->calculateTotalAmount($invoice);
-    
+            $this->invoiceService->calculateTotalAmount($invoice);
+
             if (!$invoice->getInvoiceNumber()) {
-                $this->generateInvoiceNumber($invoice, $em);
+                $this->invoiceService->generateInvoiceNumber($invoice);
             }
-    
-            $em->persist($invoice);
-            $em->flush();
-    
+
+            $this->entityManager->persist($invoice);
+            $this->entityManager->flush();
+
+            $this->eventDispatcher->dispatch(new InvoiceCreatedEvent($invoice), InvoiceCreatedEvent::NAME);
+
             return $this->redirectToRoute('invoice_list');
         }
-    
+
         return $this->render('invoice/form.html.twig', [
             'form' => $form->createView(),
             'editMode' => false,
@@ -78,11 +108,11 @@ class InvoiceController extends AbstractController
     }
 
     #[Route('/invoice/{id}/delete', name: 'invoice_delete', methods: ['POST'])]
-    public function deleteInvoice(Request $request, Invoice $invoice, EntityManagerInterface $em): Response
+    public function deleteInvoice(Request $request, Invoice $invoice): Response
     {
         if ($this->isCsrfTokenValid('delete'.$invoice->getId(), $request->request->get('_token'))) {
-            $em->remove($invoice);
-            $em->flush();
+            $this->entityManager->remove($invoice);
+            $this->entityManager->flush();
 
             $this->addFlash('success', 'Invoice deleted successfully!');
         } else {
@@ -93,71 +123,28 @@ class InvoiceController extends AbstractController
     }
 
     #[Route('/invoice/{id}/add-item', name: 'invoice_add_item')]
-    public function addItem(Request $request, Invoice $invoice, EntityManagerInterface $em): Response
+    public function addItem(Request $request, Invoice $invoice): Response
     {
         $item = new Item();
         $item->setInvoice($invoice);
-    
+
         $form = $this->createForm(ItemType::class, $item);
         $form->handleRequest($request);
-    
-        if ($form->isSubmitted() && $form->isValid()) {
-            $em->persist($item);
-            $em->flush();
-    
-            $this->calculateTotalAmount($invoice);
 
-            $em->persist($invoice);
-            $em->flush();
-    
+        if ($form->isSubmitted() && $form->isValid()) {
+            $this->entityManager->persist($item);
+            $this->entityManager->flush();
+
+            $this->invoiceService->calculateTotalAmount($invoice);
+            $this->entityManager->persist($invoice);
+            $this->entityManager->flush();
+
             return $this->redirectToRoute('invoice_list');
         }
-    
+
         return $this->render('invoice/add_item.html.twig', [
             'invoice' => $invoice,
             'form' => $form->createView(),
         ]);
-    }
-    
-    
-private function calculateTotalAmount(Invoice $invoice): void
-{
-    $totalAmount = 0;
-
-    foreach ($invoice->getItems() as $item) {
-        $totalAmount += $item->getQuantity() * $item->getUnitPrice();
-    }
-
-    $invoice->setTotalAmount($totalAmount);
-}
-
-    
-    private function generateInvoiceNumber(Invoice $invoice, EntityManagerInterface $em): void
-{
-    $issueDate = $invoice->getIssueDate();
-    if (!$issueDate) {
-        throw new \LogicException('Issue date must be set to generate the invoice number.');
-    }
-
-    $year = $issueDate->format('Y');
-
-    $lastInvoice = $em->getRepository(Invoice::class)
-        ->createQueryBuilder('i')
-        ->where('i.invoiceNumber LIKE :year')
-        ->setParameter('year', $year . '%') 
-        ->orderBy('i.invoiceNumber', 'DESC')
-        ->setMaxResults(1)
-        ->getQuery()
-        ->getOneOrNullResult();
-
-    if ($lastInvoice && preg_match('/^' . $year . '(\d{4})$/', $lastInvoice->getInvoiceNumber(), $matches)) {
-        $lastSequentialNumber = (int) $matches[1];
-        $nextSequentialNumber = $lastSequentialNumber + 1;
-    } else {
-        $nextSequentialNumber = 1;
-    }
-
-    $newInvoiceNumber = $year . str_pad($nextSequentialNumber, 4, '0', STR_PAD_LEFT);
-    $invoice->setInvoiceNumber($newInvoiceNumber);
     }
 }
